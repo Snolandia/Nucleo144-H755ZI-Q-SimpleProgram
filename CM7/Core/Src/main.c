@@ -1,22 +1,46 @@
 /* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2025 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+#ifndef HSEM_ID_0
+#define HSEM_ID_0 (0U) /* HW semaphore 0*/
+#endif
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -24,16 +48,19 @@
 COM_InitTypeDef BspCOMInit;
 
 /* USER CODE BEGIN PV */
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
 /* USER CODE END 0 */
 
 /**
@@ -44,11 +71,20 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+
   /* USER CODE END 1 */
 /* USER CODE BEGIN Boot_Mode_Sequence_0 */
+  int32_t timeout;
 /* USER CODE END Boot_Mode_Sequence_0 */
 
 /* USER CODE BEGIN Boot_Mode_Sequence_1 */
+  /* Wait until CPU2 boots and enters in stop mode or timeout*/
+  timeout = 0xFFFF;
+  while((__HAL_RCC_GET_FLAG(RCC_FLAG_D2CKRDY) != RESET) && (timeout-- > 0));
+  if ( timeout < 0 )
+  {
+  Error_Handler();
+  }
 /* USER CODE END Boot_Mode_Sequence_1 */
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -56,19 +92,37 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+
   /* USER CODE END Init */
 
   /* Configure the system clock */
   SystemClock_Config();
 /* USER CODE BEGIN Boot_Mode_Sequence_2 */
+/* When system initialization is finished, Cortex-M7 will release Cortex-M4 by means of
+HSEM notification */
+/*HW semaphore Clock enable*/
+__HAL_RCC_HSEM_CLK_ENABLE();
+/*Take HSEM */
+HAL_HSEM_FastTake(HSEM_ID_0);
+/*Release HSEM in order to notify the CPU2(CM4)*/
+HAL_HSEM_Release(HSEM_ID_0,0);
+/* wait until CPU2 wakes up from stop mode */
+timeout = 0xFFFF;
+while((__HAL_RCC_GET_FLAG(RCC_FLAG_D2CKRDY) == RESET) && (timeout-- > 0));
+if ( timeout < 0 )
+{
+Error_Handler();
+}
 /* USER CODE END Boot_Mode_Sequence_2 */
 
   /* USER CODE BEGIN SysInit */
+
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
+
   /* USER CODE END 2 */
 
   /* Initialize leds */
@@ -76,8 +130,8 @@ int main(void)
   BSP_LED_Init(LED_YELLOW);
   BSP_LED_Init(LED_RED);
 
-  /* Initialize User push-button without interrupt mode. */
-  BSP_PB_Init(BUTTON_USER, BUTTON_MODE_GPIO);
+  /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
+  BSP_PB_Init(BUTTON_USER, BUTTON_MODE_EXTI);
 
   /* Initialize COM1 port (115200, 8 bits (7-bit data + 1 stop bit), no parity */
   BspCOMInit.BaudRate   = 115200;
@@ -92,9 +146,25 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+	  // Code to change the on-board led color.
+	  BSP_LED_On(LED_GREEN);
+	  HAL_Delay(300);
+	  BSP_LED_Off(LED_GREEN);
+
+	  BSP_LED_On(LED_YELLOW);
+	  HAL_Delay(300);
+	  BSP_LED_Off(LED_YELLOW);
+
+	  BSP_LED_On(LED_RED);
+	  HAL_Delay(300);
+	  BSP_LED_Off(LED_RED);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+  }
   /* USER CODE END 3 */
 }
 
@@ -164,17 +234,29 @@ void SystemClock_Config(void)
   */
 static void MX_GPIO_Init(void)
 {
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+
+
+BSP_PB_Callback(Button_TypeDef Button){
+	// Code for the interrupt from the user button goes here
+
+	  BSP_LED_On(LED_GREEN);
+	  BSP_LED_On(LED_YELLOW);
+	  BSP_LED_On(LED_RED);
+}
+
 /* USER CODE END 4 */
 
 /**
@@ -184,6 +266,11 @@ static void MX_GPIO_Init(void)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -198,6 +285,8 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
